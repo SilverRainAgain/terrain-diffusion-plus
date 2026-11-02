@@ -1,0 +1,106 @@
+name: Build Terrain Diffusion Plus (Windows JARs)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/build-windows-jars.yml'
+      - 'versions/**'
+      - 'common/**'
+      - 'loaders/**'
+      - 'gradle/**'
+      - 'libs/**'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'gradlew'
+      - 'gradlew.bat'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Minecraft ${{ matrix.mc }} / ${{ matrix.loader }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { mc: '1.20.1', loader: fabric, loaderTask: Fabric, java: '17' }
+          - { mc: '1.20.1', loader: forge, loaderTask: Forge, java: '17' }
+          - { mc: '1.21.1', loader: fabric, loaderTask: Fabric, java: '21' }
+          - { mc: '1.21.1', loader: neoforge, loaderTask: NeoForge, java: '21' }
+          - { mc: '1.21.11', loader: fabric, loaderTask: Fabric, java: '21' }
+          - { mc: '1.21.11', loader: neoforge, loaderTask: NeoForge, java: '21' }
+
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+
+      - name: Set up Gradle caching
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build distributable Windows/DirectML JAR
+        working-directory: versions/${{ matrix.mc }}
+        run: |
+          chmod +x ../../gradlew
+          ../../gradlew build${{ matrix.loaderTask }}Windows --stacktrace --no-daemon
+
+      - name: Verify Badlands are included and stage game JARs
+        env:
+          MC: ${{ matrix.mc }}
+          LOADER: ${{ matrix.loader }}
+        run: |
+          python3 - <<'PY'
+          import glob
+          import json
+          import os
+          import shutil
+          import zipfile
+          from pathlib import Path
+
+          mc = os.environ["MC"]
+          loader = os.environ["LOADER"]
+          libs = Path("versions") / mc / loader / "build" / "libs"
+          jars = sorted(libs.glob("*.jar"))
+          print("Build outputs:", [str(x) for x in jars])
+          accepted = []
+          needed = {"minecraft:badlands", "minecraft:eroded_badlands", "minecraft:wooded_badlands"}
+          for jar in jars:
+              name = jar.name.lower()
+              if "windows" not in name or any(s in name for s in ("-dev.jar", "-sources.jar", "-javadoc.jar")):
+                  continue
+              with zipfile.ZipFile(jar) as z:
+                  paths = [p for p in z.namelist() if p.endswith("biome_catalog.json")]
+                  if not paths:
+                      print("Not a complete game jar (no biome catalog):", jar)
+                      continue
+                  catalog = json.loads(z.read(paths[0]))
+                  keys = {entry.get("key") for entry in catalog}
+                  if not needed.issubset(keys):
+                      raise SystemExit(f"{jar}: missing biomes {sorted(needed - keys)}")
+                  print(f"{jar}: catalog contains {len(keys)} biomes; all three Badlands variants found")
+                  accepted.append(jar)
+          if not accepted:
+              raise SystemExit("No Windows distributable JAR with a Badlands biome catalog was produced")
+          dest = Path("dist")
+          dest.mkdir(exist_ok=True)
+          for jar in accepted:
+              shutil.copy2(jar, dest / jar.name)
+          PY
+
+      - name: Upload distributable JARs
+        uses: actions/upload-artifact@v4
+        with:
+          name: terrain-diffusion-plus-mc${{ matrix.mc }}-${{ matrix.loader }}-windows
+          path: dist/*.jar
+          if-no-files-found: error
+          retention-days: 30
