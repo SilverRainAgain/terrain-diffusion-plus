@@ -2,7 +2,7 @@ name: Test terrain tuning (Minecraft 1.21.1 NeoForge)
 
 on:
   push:
-    branches: [terrain-tuning-2026-11, badlands-geology-v2]
+    branches: [terrain-tuning-2026-11, badlands-geology-v2, badlands-heightmap-erosion-v3]
   workflow_dispatch:
 
 concurrency:
