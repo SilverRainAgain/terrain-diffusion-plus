@@ -122,7 +122,8 @@ public final class ScaledCarvers {
     public static Iterable<Holder<ConfiguredWorldCarver<?>>> lift(
             Iterable<Holder<ConfiguredWorldCarver<?>>> carvers, int scale) {
         boolean lifting = scale > 1 && TerrainDiffusionConfig.liftCarversToTerrain();
-        if (!lifting && !rewritingBands() && TerrainDiffusionConfig.bundledCaveModEnabled()) return carvers;
+        if (!lifting && !rewritingBands() && TerrainDiffusionConfig.bundledCaveModEnabled()
+                && WorldScaleManager.vanillaCanyonsEnabled()) return carvers;
         if (scale != liftedScale) {
             // A single server has one scale; this only fires when a world of a different scale is
             // loaded in the same process, which invalidates everything cached for the old one.
@@ -140,6 +141,9 @@ public final class ScaledCarvers {
         boolean dropped = false;
         boolean hasCaveCarver = false;
         for (Holder<ConfiguredWorldCarver<?>> holder : carvers) {
+            // Vanilla canyon carvers cut artificial ravines across the neural-network terrain.
+            // Preserve all third-party carvers: this toggle only removes minecraft's canyon.
+            if (!WorldScaleManager.vanillaCanyonsEnabled() && isVanillaCanyon(holder)) continue;
             if (dropBundled && isBundledCaveMod(holder)) {
                 dropped = true;
                 continue;
@@ -156,6 +160,13 @@ public final class ScaledCarvers {
             lifted.addAll(vanillaCaveCarvers(scale));
         }
         return lifted;
+    }
+
+    private static boolean isVanillaCanyon(Holder<ConfiguredWorldCarver<?>> holder) {
+        return holder.value().worldCarver() == WorldCarver.CANYON
+                && holder.unwrapKey()
+                .map(key -> key.location().getNamespace().equals("minecraft"))
+                .orElse(false);
     }
 
     /** Whether this is one of the carvers of the cave mod this mod bundles. */
