@@ -44,7 +44,8 @@ public final class BadlandsStrataDecorator {
     public static BlockState strataFor(int x, int y, int z) {
         // Very gentle bending of coherent strata, rather than spotty per-column bands.
         float flexure = SurfaceNoise.valueNoise(0xBADD1A5DL, x / 115f, z / 115f) * 1.4f;
-        int band = Math.floorDiv((int) Math.floor(y + flexure), 4);
+        int bandThickness = LandformScale.blocks(4);
+        int band = Math.floorDiv((int) Math.floor(y + flexure), bandThickness);
         return GEOLOGY[Math.floorMod(band, GEOLOGY.length)];
     }
 
