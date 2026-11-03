@@ -35,6 +35,7 @@ jobs:
           ]
           if not candidates:
               raise SystemExit('No production Windows JAR')
+          verified = False
           for p in candidates:
               with zipfile.ZipFile(p) as jar:
                   paths = [n for n in jar.namelist() if n.endswith('biome_catalog.json')]
@@ -46,11 +47,9 @@ jobs:
                   assert any(n.endswith('BiomeWeightSettings.class') for n in jar.namelist())
                   assert any(n.endswith('BiomeWeightsScreen.class') for n in jar.namelist())
                   print('Validated:', p, 'biomes:', len(keys))
+                  verified = True
                   break
-              else:
-                  continue
-              break
-          else:
+          if not verified:
               raise SystemExit('No distributable JAR with biome catalog and new UI classes')
           PY
       - uses: actions/upload-artifact@v4
