@@ -51,5 +51,7 @@ public final class SurfaceFeatureDecorator {
                 placer.place(chunk, data, dataOriginX, dataOriginZ, site, worldSeed);
             }
         }
+        // One continuous geology pass after all features, not random isolated banded patches.
+        BadlandsStrataDecorator.decorate(chunk, data, dataOriginX, dataOriginZ);
     }
 }
