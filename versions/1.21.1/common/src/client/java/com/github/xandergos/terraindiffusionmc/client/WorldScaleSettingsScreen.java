@@ -43,10 +43,16 @@ public final class WorldScaleSettingsScreen extends Screen {
     private StringWidget validationTextWidget;
     private Button sourceLimitButton;
     private boolean blockLowAltitudeSources;
+    private boolean vanillaCanyonsEnabled;
+    private Map<String, Float> biomeWeights;
+    private String stagedScaleValue;
 
     public WorldScaleSettingsScreen(Screen parentScreen) {
         super(Component.translatable("terrain-diffusion-mc.world_settings.title"));
         this.parentScreen = parentScreen;
+        this.blockLowAltitudeSources = WorldScaleSelectionState.getPendingBlockLowAltitudeSourcesOrDefault();
+        this.vanillaCanyonsEnabled = WorldScaleSelectionState.getPendingVanillaCanyonsEnabledOrDefault();
+        this.biomeWeights = new HashMap<>(WorldScaleSelectionState.getPendingBiomeWeightsOrDefault());
     }
 
     @Override
@@ -56,36 +62,50 @@ public final class WorldScaleSettingsScreen extends Screen {
 
         addCenteredTextWidget(this.title, centerX, 20, 0xFFFFFF);
 
-        addCenteredTextWidget(DESCRIPTION_TEXT, centerX, centerY - 34, 0xAAAAAA);
-        addCenteredTextWidget(LABEL_TEXT, centerX, centerY - 22, 0xFFFFFF);
+        addCenteredTextWidget(DESCRIPTION_TEXT, centerX, centerY - 60, 0xAAAAAA);
+        addCenteredTextWidget(LABEL_TEXT, centerX, centerY - 47, 0xFFFFFF);
 
         scaleTextField = new EditBox(this.font,
-                centerX - TEXT_FIELD_WIDTH / 2, centerY - 10,
+                centerX - TEXT_FIELD_WIDTH / 2, centerY - 31,
                 TEXT_FIELD_WIDTH, TEXT_FIELD_HEIGHT,
                 LABEL_TEXT);
-        scaleTextField.setValue(String.valueOf(WorldScaleSelectionState.getPendingScaleOrDefault()));
-        scaleTextField.setResponder(value -> validationTextWidget.setMessage(Component.empty()));
+        scaleTextField.setValue(stagedScaleValue == null
+                ? String.valueOf(WorldScaleSelectionState.getPendingScaleOrDefault()) : stagedScaleValue);
+        scaleTextField.setResponder(value -> {
+            stagedScaleValue = value;
+            if (validationTextWidget != null) validationTextWidget.setMessage(Component.empty());
+        });
         this.addRenderableWidget(scaleTextField);
         this.setInitialFocus(scaleTextField);
 
-        blockLowAltitudeSources = WorldScaleSelectionState.getPendingBlockLowAltitudeSourcesOrDefault();
         sourceLimitButton = Button.builder(sourceLimitLabel(), button -> {
                     blockLowAltitudeSources = !blockLowAltitudeSources;
                     button.setMessage(sourceLimitLabel());
                 })
-                .bounds(centerX - OPTION_BUTTON_WIDTH / 2, centerY + 18,
+                .bounds(centerX - OPTION_BUTTON_WIDTH / 2, centerY - 2,
                         OPTION_BUTTON_WIDTH, BUTTON_HEIGHT)
                 .build();
         this.addRenderableWidget(sourceLimitButton);
 
+        this.addRenderableWidget(Button.builder(canyonsLabel(), b -> {
+                    vanillaCanyonsEnabled = !vanillaCanyonsEnabled;
+                    b.setMessage(canyonsLabel());
+                }).bounds(centerX - OPTION_BUTTON_WIDTH / 2, centerY + 25,
+                        OPTION_BUTTON_WIDTH, BUTTON_HEIGHT).build());
+
+        this.addRenderableWidget(Button.builder(Component.literal("Biome weights..."), b -> {
+                    if (this.minecraft != null) this.minecraft.setScreen(new BiomeWeightsScreen(this, biomeWeights));
+                }).bounds(centerX - OPTION_BUTTON_WIDTH / 2, centerY + 52,
+                        OPTION_BUTTON_WIDTH, BUTTON_HEIGHT).build());
+
         this.addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> onDonePressed())
-                .bounds(centerX - BUTTON_WIDTH - 5, centerY + 48, BUTTON_WIDTH, BUTTON_HEIGHT)
+                .bounds(centerX - BUTTON_WIDTH - 5, centerY + 79, BUTTON_WIDTH, BUTTON_HEIGHT)
                 .build());
         this.addRenderableWidget(Button.builder(Component.translatable("gui.cancel"), b -> onClose())
-                .bounds(centerX + 5, centerY + 48, BUTTON_WIDTH, BUTTON_HEIGHT)
+                .bounds(centerX + 5, centerY + 79, BUTTON_WIDTH, BUTTON_HEIGHT)
                 .build());
 
-        validationTextWidget = new StringWidget(0, centerY + 74, this.width, 9, Component.empty(), this.font);
+        validationTextWidget = new StringWidget(0, centerY + 106, this.width, 9, Component.empty(), this.font);
         this.addRenderableWidget(validationTextWidget);
     }
 
@@ -112,6 +132,14 @@ public final class WorldScaleSettingsScreen extends Screen {
         return Component.literal("New river sources below 775 m: " + state);
     }
 
+    private Component canyonsLabel() {
+        return Component.literal("Vanilla ravines: " + (vanillaCanyonsEnabled ? "Enabled" : "Disabled"));
+    }
+
+    void acceptBiomeWeights(Map<String, Float> weights) {
+        this.biomeWeights = new HashMap<>(weights);
+    }
+
     /**
      * Parses and validates the chosen scale, then stores it as a pending world-creation value.
      */
@@ -128,7 +156,8 @@ public final class WorldScaleSettingsScreen extends Screen {
                 return;
             }
             applyWorldHeightForScale(selectedScale);
-            WorldScaleSelectionState.setPendingSettings(selectedScale, blockLowAltitudeSources);
+            WorldScaleSelectionState.setPendingSettings(selectedScale, blockLowAltitudeSources,
+                    vanillaCanyonsEnabled, biomeWeights);
             onClose();
         } catch (NumberFormatException exception) {
             validationTextWidget.setMessage(ERROR_TEXT);
