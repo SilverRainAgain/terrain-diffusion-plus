@@ -29,8 +29,8 @@ public final class BadlandsButteFeaturePlacer implements SurfaceFeaturePlacer {
     private static final int MAX_HEIGHT = 58;
 
     @Override public String id() { return "badlands_butte"; }
-    @Override public int cellSizeBlocks() { return CELL_SIZE; }
-    @Override public int maxReachBlocks() { return MAX_RADIUS * 2; }
+    @Override public int cellSizeBlocks() { return LandformScale.blocks(CELL_SIZE); }
+    @Override public int maxReachBlocks() { return LandformScale.blocks(MAX_RADIUS * 2); }
     @Override public long salt() { return SALT; }
 
     @Override
@@ -49,8 +49,8 @@ public final class BadlandsButteFeaturePlacer implements SurfaceFeaturePlacer {
         if (TerrainSampling.slopeAt(data, centerRow, centerCol, 5)
                 > SurfaceStamp.slopeFromBlocks(0.25f)) return;
 
-        int radius = SurfaceStamp.randRange(site.seed(), 91, 20, MIN_RADIUS, MAX_RADIUS);
-        int height = SurfaceStamp.randRange(site.seed(), 27, 43, MIN_HEIGHT, MAX_HEIGHT);
+        int radius = LandformScale.blocks(SurfaceStamp.randRange(site.seed(), 91, 20, MIN_RADIUS, MAX_RADIUS));
+        int height = LandformScale.blocks(SurfaceStamp.randRange(site.seed(), 27, 43, MIN_HEIGHT, MAX_HEIGHT));
         float angle = (float) (SurfaceNoise.unitHash(site.seed(), 51, 14) * Math.PI * 2.0);
         float cosine = (float) Math.cos(angle);
         float sine = (float) Math.sin(angle);
