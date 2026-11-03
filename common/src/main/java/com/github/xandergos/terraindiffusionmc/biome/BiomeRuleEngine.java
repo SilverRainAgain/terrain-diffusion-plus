@@ -96,6 +96,11 @@ public final class BiomeRuleEngine {
         this.registry = registry;
     }
 
+    /** Recompile the selection table after loading another world's weights. */
+    public synchronized void invalidateWeights() {
+        compiled = null;
+    }
+
     /** Supplies a noise field's value at a world position, for fields sampled only on demand. */
     @FunctionalInterface
     public interface NoiseSampler {
@@ -262,7 +267,8 @@ public final class BiomeRuleEngine {
             for (int rule = 0; rule < ruleCount; rule++) {
                 RuleEntry entry = entries.get(rule);
                 biomeIndex[rule] = entry.index;
-                rarity[rule] = entry.rule.rarity();
+                rarity[rule] = entry.rule.rarity()
+                        * BiomeWeightSettings.multiplier(entry.key);
                 override[rule] = entry.rule.isOverride();
 
                 climateStart[rule] = climateAt;
@@ -397,10 +403,10 @@ public final class BiomeRuleEngine {
             Map<String, List<RuleEntry>> byZone = new LinkedHashMap<>();
             for (TerrainBiomeSettlement settlement : registry.all()) {
                 for (TerrainBiomeRule rule : settlement.rules()) {
-                    if (rule.rarity() <= 0f) continue;  // weightless rules can never be selected
+                    if (rule.rarity() <= 0f || BiomeWeightSettings.multiplier(settlement.key()) <= 0f) continue;
                     if (!rule.isAvailable()) continue;  // rule belongs to an optional mod that isn't installed
                     byZone.computeIfAbsent(rule.zone(), zone -> new ArrayList<>())
-                            .add(new RuleEntry(settlement.index(), rule));
+                            .add(new RuleEntry(settlement.index(), settlement.key(), rule));
                 }
             }
 
@@ -592,10 +598,12 @@ public final class BiomeRuleEngine {
 
     private static final class RuleEntry {
         final short index;
+        final String key;
         final TerrainBiomeRule rule;
 
-        RuleEntry(short index, TerrainBiomeRule rule) {
+        RuleEntry(short index, String key, TerrainBiomeRule rule) {
             this.index = index;
+            this.key = key;
             this.rule = rule;
         }
     }
