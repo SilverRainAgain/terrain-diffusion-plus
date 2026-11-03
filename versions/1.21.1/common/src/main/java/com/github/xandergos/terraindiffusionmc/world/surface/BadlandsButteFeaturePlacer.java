@@ -22,26 +22,15 @@ import net.minecraft.world.level.levelgen.Heightmap;
  */
 public final class BadlandsButteFeaturePlacer implements SurfaceFeaturePlacer {
     private static final long SALT = 0xBADD1A5DL;
-    private static final int CELL_SIZE = 160;
-    private static final int MAX_RADIUS = 36;
-    private static final int MIN_RADIUS = 23;
-    private static final int MIN_HEIGHT = 18;
-    private static final int MAX_HEIGHT = 39;
-
-    private static final BlockState[] STRATA = {
-            Blocks.TERRACOTTA.defaultBlockState(),
-            Blocks.ORANGE_TERRACOTTA.defaultBlockState(),
-            Blocks.TERRACOTTA.defaultBlockState(),
-            Blocks.YELLOW_TERRACOTTA.defaultBlockState(),
-            Blocks.LIGHT_GRAY_TERRACOTTA.defaultBlockState(),
-            Blocks.TERRACOTTA.defaultBlockState(),
-            Blocks.RED_TERRACOTTA.defaultBlockState(),
-            Blocks.ORANGE_TERRACOTTA.defaultBlockState()
-    };
+    private static final int CELL_SIZE = 260;
+    private static final int MAX_RADIUS = 58;
+    private static final int MIN_RADIUS = 28;
+    private static final int MIN_HEIGHT = 20;
+    private static final int MAX_HEIGHT = 58;
 
     @Override public String id() { return "badlands_butte"; }
     @Override public int cellSizeBlocks() { return CELL_SIZE; }
-    @Override public int maxReachBlocks() { return MAX_RADIUS + 2; }
+    @Override public int maxReachBlocks() { return MAX_RADIUS * 2; }
     @Override public long salt() { return SALT; }
 
     @Override
@@ -62,6 +51,10 @@ public final class BadlandsButteFeaturePlacer implements SurfaceFeaturePlacer {
 
         int radius = SurfaceStamp.randRange(site.seed(), 91, 20, MIN_RADIUS, MAX_RADIUS);
         int height = SurfaceStamp.randRange(site.seed(), 27, 43, MIN_HEIGHT, MAX_HEIGHT);
+        float angle = (float) (SurfaceNoise.unitHash(site.seed(), 51, 14) * Math.PI * 2.0);
+        float cosine = (float) Math.cos(angle);
+        float sine = (float) Math.sin(angle);
+        float aspect = 0.70f + SurfaceNoise.unitHash(site.seed(), 19, 88) * 0.65f;
         int siteBaseY = com.github.xandergos.terraindiffusionmc.world.HeightConverter.convertToMinecraftHeight(
                 (short) TerrainSampling.elevationAt(data, centerRow, centerCol)) - 1;
         int minX = chunk.getPos().getMinBlockX();
@@ -79,18 +72,27 @@ public final class BadlandsButteFeaturePlacer implements SurfaceFeaturePlacer {
 
                 float dx = worldX - site.worldX();
                 float dz = worldZ - site.worldZ();
-                // Low-frequency edge distortion avoids a perfect circular mesa footprint.
-                float edgeWarp = SurfaceNoise.valueNoise(worldSeed ^ SALT,
-                        worldX / 19f, worldZ / 19f) * 3.5f;
-                float distance = (float) Math.sqrt(dx * dx + dz * dz) + edgeWarp;
-                if (distance >= radius) continue;
+                // Rotated, asymmetric footprint with erosion on multiple wavelengths.
+                float along = dx * cosine + dz * sine;
+                float across = -dx * sine + dz * cosine;
+                float elongation = (float) Math.sqrt(
+                        (along / (radius * aspect)) * (along / (radius * aspect))
+                        + (across * aspect / radius) * (across * aspect / radius));
+                float broadErosion = SurfaceNoise.valueNoise(
+                        site.seed() ^ 0xE20510AAL, worldX / 33f, worldZ / 33f);
+                float fineErosion = SurfaceNoise.valueNoise(
+                        site.seed() ^ 0xA52E450L, worldX / 11f, worldZ / 11f);
+                float distance = elongation + 0.15f * broadErosion + 0.04f * fineErosion;
+                if (distance >= 1f) continue;
 
-                float fraction = Math.max(0f, distance / radius);
-                // Broad, nearly level cap; an eroded stepped shoulder and a steep lower rim.
-                float shoulder = SurfaceNoise.clamp01((1.0f - fraction) / 0.48f);
-                float stepped = (float) Math.floor(shoulder * 5f) / 5f;
-                float envelope = shoulder * 0.75f + stepped * 0.25f;
-                int topY = siteBaseY + Math.round(height * envelope);
+                float shoulder = SurfaceNoise.clamp01((1f - distance) / 0.53f);
+                float envelope = shoulder * shoulder * (3f - 2f * shoulder);
+                float ledge = distance > 0.38f && distance < 0.82f
+                        ? Math.max(0f, fineErosion) * 0.085f : 0f;
+                float summit = 0.93f + 0.07f * SurfaceNoise.valueNoise(
+                        site.seed() ^ 0x9C10FFL, worldX / 26f, worldZ / 26f);
+                int topY = siteBaseY + Math.round(height * Math.max(0f,
+                        envelope * summit - ledge));
                 if (topY <= siteBaseY + 2) continue;
 
                 int surfaceY = SurfaceStamp.surfaceY(chunk, lx, lz);
@@ -104,7 +106,7 @@ public final class BadlandsButteFeaturePlacer implements SurfaceFeaturePlacer {
                 int maxY = Math.min(topY, chunk.getMaxBuildHeight() - 1);
                 for (int y = surfaceY + 1; y <= maxY; y++) {
                     SurfaceStamp.placeIfAir(chunk, surfaceMap, motionMap, worldX, y, worldZ,
-                            strataForY(y));
+                            BadlandsStrataDecorator.strataFor(worldX, y, worldZ));
                 }
             }
         }
@@ -119,8 +121,4 @@ public final class BadlandsButteFeaturePlacer implements SurfaceFeaturePlacer {
         return "minecraft:badlands".equals(key) || "minecraft:eroded_badlands".equals(key);
     }
 
-    private static BlockState strataForY(int y) {
-        // Absolute Y (not site random) keeps bands horizontal across neighbouring formations.
-        return STRATA[Math.floorMod(Math.floorDiv(y, 4), STRATA.length)];
-    }
 }
