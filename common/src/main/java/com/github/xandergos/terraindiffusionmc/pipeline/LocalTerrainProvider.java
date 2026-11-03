@@ -1096,6 +1096,13 @@ public final class LocalTerrainProvider {
                 biomes, coreClimate, topology, halo, halo, coreSize, coreSize);
         long tRiverBiomes = System.nanoTime();
 
+        // Surface geometry is derived from the neural heightmap and real drainage,
+        // NOT from freestanding rock placers. The canonical raster is modified here
+        // before it is compacted, so all Minecraft consumers see the same heights.
+        BadlandsHeightmapErosion.erode(coreElevation, biomes, paddedBiomes,
+                paddedElevation, coreSize, biomePadding, coreI0, coreJ0,
+                topology, halo, analysisWidth, pixelSizeM, instanceSeed);
+
         int cells = Math.multiplyExact(coreSize, coreSize);
         short[] compactElevation = new short[cells];
         byte[] compactWaterMask = new byte[cells];
