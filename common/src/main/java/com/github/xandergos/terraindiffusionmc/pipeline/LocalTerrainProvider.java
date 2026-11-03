@@ -1074,7 +1074,7 @@ public final class LocalTerrainProvider {
         // two rows/columns, leaving unmistakable straight lines at tile borders.
         // Classify a padded window in *world* coordinates, then crop the center:
         // adjacent tiles compute exactly the same winners at their shared boundary.
-        final int biomePadding = 12;
+        final int biomePadding = Math.min(104, Math.max(1, halo - 2));
         final int paddedSize = coreSize + 2 * biomePadding;
         float[] paddedElevation = carved.cropAdjustedElevation(
                 halo - biomePadding, halo - biomePadding, paddedSize, paddedSize, analysisWidth);
