@@ -21,7 +21,6 @@ public final class SurfaceFeatureRegistry {
             new BalancedRockFeaturePlacer(),
             new SeaStackFeaturePlacer(),
             new SeaArchFeaturePlacer(),
-            new MesasFeaturePlacer(),
             new PetrifiedDuneFeaturePlacer(),
             new OasisSinkholeFeaturePlacer(),
             new SandDuneCrestFeaturePlacer(),
