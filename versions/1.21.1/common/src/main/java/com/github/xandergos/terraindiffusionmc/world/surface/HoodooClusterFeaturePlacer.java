@@ -45,12 +45,12 @@ import net.minecraft.world.level.levelgen.Heightmap;
  */
 public final class HoodooClusterFeaturePlacer implements SurfaceFeaturePlacer {
     private static final long SALT = 0x400D00A1L;
-    private static final int CELL_SIZE = 40;
-    private static final int CLUSTER_RADIUS = 8;
-    private static final int MAX_COLUMNS = 4;
-    private static final int MIN_COLUMN_HEIGHT = 5;
-    private static final int MAX_COLUMN_HEIGHT = 13;
-    private static final int BASE_RADIUS = 2;
+    private static final int CELL_SIZE = 82;
+    private static final int CLUSTER_RADIUS = 18;
+    private static final int MAX_COLUMNS = 3;
+    private static final int MIN_COLUMN_HEIGHT = 8;
+    private static final int MAX_COLUMN_HEIGHT = 25;
+    private static final int BASE_RADIUS = 4;
     /** How far below its base a column may extend roots to find solid ground. */
     private static final int ROOT_DEPTH = 6;
 
@@ -74,12 +74,12 @@ public final class HoodooClusterFeaturePlacer implements SurfaceFeaturePlacer {
 
     @Override
     public int cellSizeBlocks() {
-        return CELL_SIZE;
+        return LandformScale.blocks(CELL_SIZE);
     }
 
     @Override
     public int maxReachBlocks() {
-        return CLUSTER_RADIUS + BASE_RADIUS + 2;
+        return LandformScale.blocks(CLUSTER_RADIUS + BASE_RADIUS + 5);
     }
 
     @Override
@@ -108,7 +108,7 @@ public final class HoodooClusterFeaturePlacer implements SurfaceFeaturePlacer {
         if (placement <= PLACEMENT_THRESHOLD) return;
         float strength = SurfaceNoise.clamp01((placement - PLACEMENT_THRESHOLD) / (1.0f - PLACEMENT_THRESHOLD));
 
-        int columnCount = 2 + (int) (strength * (MAX_COLUMNS - 2));
+        int columnCount = 1 + (int) (strength * (MAX_COLUMNS - 1));
         // One strata offset for the whole cluster, so bands line up across every hoodoo in it.
         int bandOffset = (int) (SurfaceNoise.unitHash(site.seed(), 5, 9) * BADLANDS_BANDS.length);
         Heightmap worldSurface = chunk.getOrCreateHeightmapUnprimed(Heightmap.Types.WORLD_SURFACE_WG);
@@ -117,13 +117,13 @@ public final class HoodooClusterFeaturePlacer implements SurfaceFeaturePlacer {
         for (int i = 0; i < columnCount; i++) {
             long columnSeed = SurfaceNoise.hash(site.seed(), i, 1000 + i);
             float angle = SurfaceNoise.unitHash(columnSeed, 1, 0) * (float) (Math.PI * 2);
-            float distance = SurfaceNoise.unitHash(columnSeed, 2, 0) * CLUSTER_RADIUS;
+            float distance = SurfaceNoise.unitHash(columnSeed, 2, 0) * LandformScale.blocks(CLUSTER_RADIUS);
             int columnWorldX = site.worldX() + Math.round((float) Math.cos(angle) * distance);
             int columnWorldZ = site.worldZ() + Math.round((float) Math.sin(angle) * distance);
 
             // Skip columns whose footprint can't touch this chunk -- everything else is placed
             // with per-block clipping, so border columns get their full shape from both sides.
-            if (!footprintTouchesChunk(chunk, columnWorldX, columnWorldZ, BASE_RADIUS + 1)) continue;
+            if (!footprintTouchesChunk(chunk, columnWorldX, columnWorldZ, LandformScale.blocks(BASE_RADIUS + 4))) continue;
 
             int cRow = columnWorldZ - dataOriginZ;
             int cCol = columnWorldX - dataOriginX;
@@ -133,9 +133,10 @@ public final class HoodooClusterFeaturePlacer implements SurfaceFeaturePlacer {
             int groundY = HeightConverter.convertToMinecraftHeight((short) columnElevation) - 1;
             if (groundY <= chunk.getMinBuildHeight()) continue;
 
-            int height = MIN_COLUMN_HEIGHT
-                    + (int) (SurfaceNoise.unitHash(columnSeed, 3, 0) * (MAX_COLUMN_HEIGHT - MIN_COLUMN_HEIGHT));
-            placeColumn(chunk, worldSurface, motionBlocking, columnWorldX, columnWorldZ,
+            int height = LandformScale.blocks(MIN_COLUMN_HEIGHT
+                    + (int) (SurfaceNoise.unitHash(columnSeed, 3, 0)
+                    * (MAX_COLUMN_HEIGHT - MIN_COLUMN_HEIGHT)));
+            placeColumn(chunk, worldSurface, motionBlocking, columnSeed, columnWorldX, columnWorldZ,
                     groundY, height, bandOffset);
         }
     }
@@ -148,24 +149,31 @@ public final class HoodooClusterFeaturePlacer implements SurfaceFeaturePlacer {
     }
 
     private void placeColumn(ChunkAccess chunk, Heightmap worldSurface, Heightmap motionBlocking,
-                              int worldX, int worldZ, int groundY, int height, int bandOffset) {
+                              long columnSeed, int worldX, int worldZ, int groundY, int height, int bandOffset) {
         int capLayer = height - 1;
         for (int dy = 0; dy <= height; dy++) {
             int worldY = groundY + 1 + dy;
             // Radius shrinks with height, with a slightly flared cap layer for the classic hoodoo
             // silhouette (narrow neck, wider capstone).
-            float taper = 1.0f - (dy / (float) height) * 0.7f;
-            float radius = BASE_RADIUS * taper;
-            if (dy == capLayer) radius += 0.6f;
+            float t = dy / (float) height;
+            float taper = 1.0f - t * 0.65f;
+            float irregularity = (float) Math.sin(t * 8f
+                    + SurfaceNoise.unitHash(columnSeed, 4, 7) * 6.28f) * 0.12f;
+            float radius = LandformScale.blocks(BASE_RADIUS)
+                    * (0.75f + SurfaceNoise.unitHash(columnSeed, 9, 3) * 0.50f)
+                    * Math.max(0.22f, taper + irregularity);
+            if (dy >= capLayer - 1) radius += LandformScale.multiplier() * 0.8f;
 
             int r = Math.max(0, Math.round(radius));
             for (int dz = -r; dz <= r; dz++) {
                 for (int dx = -r; dx <= r; dx++) {
-                    if (Math.sqrt(dx * dx + dz * dz) > radius + 0.3f) continue;
+                    float edgeNoise = SurfaceNoise.valueNoise(columnSeed,
+                            (worldX + dx) / 9f, (worldZ + dz) / 9f) * 0.55f;
+                    if (Math.sqrt(dx * dx + dz * dz) > radius + edgeNoise) continue;
                     int wx = worldX + dx;
                     int wz = worldZ + dz;
                     SurfaceStamp.placeIfAir(chunk, worldSurface, motionBlocking, wx, worldY, wz,
-                            bandFor(bandOffset, worldY));
+                            BadlandsStrataDecorator.strataFor(wx, worldY, wz));
                     if (dy == 0) {
                         placeRoots(chunk, worldSurface, motionBlocking, wx, groundY, wz, bandOffset);
                     }
@@ -182,12 +190,8 @@ public final class HoodooClusterFeaturePlacer implements SurfaceFeaturePlacer {
         for (int y = groundY; y > groundY - ROOT_DEPTH; y--) {
             if (!SurfaceStamp.stateAt(chunk, wx, y, wz).isAir()) break;
             SurfaceStamp.placeIfAir(chunk, worldSurface, motionBlocking, wx, y, wz,
-                    bandFor(bandOffset, y));
+                    BadlandsStrataDecorator.strataFor(wx, y, wz));
         }
     }
 
-    /** Horizontal 1-block strata keyed to absolute Y -- continuous across the whole cluster. */
-    private static BlockState bandFor(int bandOffset, int y) {
-        return BADLANDS_BANDS[Math.floorMod(y + bandOffset, BADLANDS_BANDS.length)];
-    }
 }

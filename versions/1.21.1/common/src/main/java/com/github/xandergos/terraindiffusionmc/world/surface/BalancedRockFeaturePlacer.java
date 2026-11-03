@@ -19,13 +19,13 @@ import net.minecraft.world.level.levelgen.Heightmap;
  */
 public final class BalancedRockFeaturePlacer implements SurfaceFeaturePlacer {
     private static final long SALT = 0x424C414CL;
-    private static final float SPAWN_CHANCE = 0.15f;
+    private static final float SPAWN_CHANCE = 0.09f;
     private static final float MAX_SLOPE_BLOCKS = 0.2f;
-    private static final int CELL_SIZE = 50;
-    private static final int PILLAR_RADIUS = 1;
-    private static final int PILLAR_MIN_HEIGHT = 3;
-    private static final int PILLAR_MAX_HEIGHT = 5;
-    private static final int CAPSTONE_RADIUS = 2;
+    private static final int CELL_SIZE = 105;
+    private static final int PILLAR_RADIUS = 2;
+    private static final int PILLAR_MIN_HEIGHT = 7;
+    private static final int PILLAR_MAX_HEIGHT = 15;
+    private static final int CAPSTONE_RADIUS = 4;
 
     private static final BlockState[] PILLAR_BLOCKS = {
             Blocks.STONE.defaultBlockState(),
@@ -48,12 +48,12 @@ public final class BalancedRockFeaturePlacer implements SurfaceFeaturePlacer {
 
     @Override
     public int cellSizeBlocks() {
-        return CELL_SIZE;
+        return LandformScale.blocks(CELL_SIZE);
     }
 
     @Override
     public int maxReachBlocks() {
-        return 6;
+        return LandformScale.blocks(12);
     }
 
     @Override
@@ -64,11 +64,7 @@ public final class BalancedRockFeaturePlacer implements SurfaceFeaturePlacer {
     @Override
     public void place(ChunkAccess chunk, HeightmapData data, int dataOriginX, int dataOriginZ,
                        SiteGrid.Site site, long worldSeed) {
-        int localX = site.worldX() - chunk.getPos().getMinBlockX();
-        int localZ = site.worldZ() - chunk.getPos().getMinBlockZ();
-        if (localX < 0 || localX > 15 || localZ < 0 || localZ > 15) return;
-
-        if (SurfaceNoise.unitHash(worldSeed ^ SALT, site.worldX(), site.worldZ()) >= SPAWN_CHANCE) return;
+                if (SurfaceNoise.unitHash(worldSeed ^ SALT, site.worldX(), site.worldZ()) >= SPAWN_CHANCE) return;
 
         int row = site.worldZ() - dataOriginZ;
         int col = site.worldX() - dataOriginX;
@@ -84,17 +80,18 @@ public final class BalancedRockFeaturePlacer implements SurfaceFeaturePlacer {
         }
         if (TerrainSampling.slopeAt(data, row, col, 2) > SurfaceStamp.slopeFromBlocks(MAX_SLOPE_BLOCKS)) return;
 
-        int groundY = SurfaceStamp.surfaceY(chunk, localX, localZ);
+        int groundY = com.github.xandergos.terraindiffusionmc.world.HeightConverter
+                .convertToMinecraftHeight((short) TerrainSampling.elevationAt(data, row, col)) - 1;
         if (groundY <= chunk.getMinBuildHeight()) return;
-        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(site.worldX(), groundY, site.worldZ());
-        if (!isSolidGround(chunk.getBlockState(pos))) return;
 
         stamp(chunk, site, groundY);
     }
 
     private void stamp(ChunkAccess chunk, SiteGrid.Site site, int groundY) {
         long seed = site.seed();
-        int pillarHeight = PILLAR_MIN_HEIGHT + (int) (SurfaceNoise.unitHash(seed, 0, 0) * (PILLAR_MAX_HEIGHT - PILLAR_MIN_HEIGHT + 1));
+        int pillarHeight = LandformScale.blocks(PILLAR_MIN_HEIGHT
+                + (int) (SurfaceNoise.unitHash(seed, 0, 0)
+                * (PILLAR_MAX_HEIGHT - PILLAR_MIN_HEIGHT + 1)));
         BlockState pillarBlock = PILLAR_BLOCKS[Math.floorMod((int) (SurfaceNoise.unitHash(seed, 0, 1) * PILLAR_BLOCKS.length), PILLAR_BLOCKS.length)];
         BlockState capstoneBlock = CAPSTONE_BLOCKS[Math.floorMod((int) (SurfaceNoise.unitHash(seed, 0, 2) * CAPSTONE_BLOCKS.length), CAPSTONE_BLOCKS.length)];
 
@@ -102,10 +99,10 @@ public final class BalancedRockFeaturePlacer implements SurfaceFeaturePlacer {
         int offsetX = 0;
         int offsetZ = 0;
         switch (offsetDir) {
-            case 0: offsetX = 1; break;
-            case 1: offsetZ = 1; break;
-            case 2: offsetX = -1; break;
-            default: offsetZ = -1; break;
+            case 0: offsetX = LandformScale.blocks(2); break;
+            case 1: offsetZ = LandformScale.blocks(2); break;
+            case 2: offsetX = -LandformScale.blocks(2); break;
+            default: offsetZ = -LandformScale.blocks(2); break;
         }
 
         Heightmap worldSurface = chunk.getOrCreateHeightmapUnprimed(Heightmap.Types.WORLD_SURFACE_WG);
@@ -116,17 +113,17 @@ public final class BalancedRockFeaturePlacer implements SurfaceFeaturePlacer {
 
         for (int dy = 0; dy < pillarHeight; dy++) {
             int worldY = groundY + 1 + dy;
-            for (int dz = -PILLAR_RADIUS; dz <= PILLAR_RADIUS; dz++) {
+            for (int dz = -LandformScale.blocks(PILLAR_RADIUS); dz <= LandformScale.blocks(PILLAR_RADIUS); dz++) {
                 int worldZ = site.worldZ() + dz;
                 int localZ = worldZ - minZ;
                 if (localZ < 0 || localZ > 15) continue;
-                for (int dx = -PILLAR_RADIUS; dx <= PILLAR_RADIUS; dx++) {
+                for (int dx = -LandformScale.blocks(PILLAR_RADIUS); dx <= LandformScale.blocks(PILLAR_RADIUS); dx++) {
                     int worldX = site.worldX() + dx;
                     int localX = worldX - minX;
                     if (localX < 0 || localX > 15) continue;
 
                     float horizontal = (float) Math.sqrt(dx * dx + dz * dz);
-                    if (horizontal > PILLAR_RADIUS + 0.3f) continue;
+                    if (horizontal > LandformScale.blocks(PILLAR_RADIUS) + 0.3f) continue;
 
                     pos.set(worldX, worldY, worldZ);
                     if (!chunk.getBlockState(pos).isAir()) continue;
@@ -141,17 +138,17 @@ public final class BalancedRockFeaturePlacer implements SurfaceFeaturePlacer {
         int capCenterX = site.worldX() + offsetX;
         int capCenterZ = site.worldZ() + offsetZ;
 
-        for (int dz = -CAPSTONE_RADIUS; dz <= CAPSTONE_RADIUS; dz++) {
+        for (int dz = -LandformScale.blocks(CAPSTONE_RADIUS); dz <= LandformScale.blocks(CAPSTONE_RADIUS); dz++) {
             int worldZ = capCenterZ + dz;
             int localZ = worldZ - minZ;
             if (localZ < 0 || localZ > 15) continue;
-            for (int dx = -CAPSTONE_RADIUS; dx <= CAPSTONE_RADIUS; dx++) {
+            for (int dx = -LandformScale.blocks(CAPSTONE_RADIUS); dx <= LandformScale.blocks(CAPSTONE_RADIUS); dx++) {
                 int worldX = capCenterX + dx;
                 int localX = worldX - minX;
                 if (localX < 0 || localX > 15) continue;
 
                 float horizontal = (float) Math.sqrt(dx * dx + dz * dz);
-                if (horizontal > CAPSTONE_RADIUS + 0.3f) continue;
+                if (horizontal > LandformScale.blocks(CAPSTONE_RADIUS) + 0.3f) continue;
 
                 pos.set(worldX, capstoneY, worldZ);
                 if (!chunk.getBlockState(pos).isAir()) continue;

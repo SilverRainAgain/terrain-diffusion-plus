@@ -62,6 +62,7 @@ public final class BiomeClassifier {
     private static final FastNoiseLite FOREST_CLEARING_NOISE, FLOWER_PATCH_NOISE;
     private static final FastNoiseLite REGION_NOISE;
     private static final FastNoiseLite REGION_WARP_X, REGION_WARP_Z;
+    private static final FastNoiseLite BIOME_EDGE_WARP_X, BIOME_EDGE_WARP_Z;
 
     /**
      * Domain-warp displacement amplitude for {@link #sampleRegionNoise}, in blocks. Sized against
@@ -96,6 +97,8 @@ public final class BiomeClassifier {
         // fitted by the biome lab (and the lab's distributional regionNoise model) stay valid.
         REGION_WARP_X = makeFnl(881122, 1f/1500f, 3, 2f, 0.5f);
         REGION_WARP_Z = makeFnl(993344, 1f/1500f, 3, 2f, 0.5f);
+        BIOME_EDGE_WARP_X = makeFnl(192837, 1f/90f, 2, 2f, 0.5f);
+        BIOME_EDGE_WARP_Z = makeFnl(738291, 1f/90f, 2, 2f, 0.5f);
     }
 
     /**
@@ -192,6 +195,7 @@ public final class BiomeClassifier {
         long tRules = System.nanoTime();
         smoothIsolatedTransitions(out, H, W);
         smoothOrganicTransitions(out, H, W);
+        warpOrganicLandBoundaries(out, H, W, i0, j0);
         long tSmooth = System.nanoTime();
         LOG.debug("BiomeClassifier.classify {}x{} phases (ms): slope={} noiseAndRules={} smoothing={} total={}",
                 H, W, millis(tStart, tSlope), millis(tSlope, tRules),
@@ -307,6 +311,32 @@ public final class BiomeClassifier {
                     biomes[idx] = best;
                 }
                 clearBiomeCounts(counts, touched, touchedCount);
+            }
+        });
+    }
+
+    /**
+     * Distort borders between blendable land biomes using a low-frequency, world-anchored
+     * displacement. Without this, large neighbouring climate provinces can end in unnaturally
+     * straight lines. This does not change ocean, river, coast or hard mountain boundaries.
+     *
+     * All source samples are read from one immutable copy, and the classifier is evaluated with
+     * a 12-pixel halo by LocalTerrainProvider, so neighbouring generation tiles agree.
+     */
+    private static void warpOrganicLandBoundaries(short[] biomes, int H, int W, int i0, int j0) {
+        final int amplitude = 7;
+        short[] source = biomes.clone();
+        HydrologyParallel.forEachRow(amplitude, H - amplitude, W, row -> {
+            int base = row * W;
+            for (int col = amplitude; col < W - amplitude; col++) {
+                int idx = base + col;
+                short current = source[idx];
+                if (!BLENDABLE_LAND[current]) continue;
+                float x = j0 + col, z = i0 + row;
+                int shiftX = Math.round(BIOME_EDGE_WARP_X.GetNoise(x, z) * amplitude);
+                int shiftZ = Math.round(BIOME_EDGE_WARP_Z.GetNoise(x, z) * amplitude);
+                short candidate = source[(row + shiftZ) * W + col + shiftX];
+                if (candidate != current && BLENDABLE_LAND[candidate]) biomes[idx] = candidate;
             }
         });
     }

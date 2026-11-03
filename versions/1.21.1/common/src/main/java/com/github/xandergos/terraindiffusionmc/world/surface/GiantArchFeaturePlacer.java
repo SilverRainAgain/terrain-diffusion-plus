@@ -28,15 +28,15 @@ import net.minecraft.world.level.levelgen.Heightmap;
  */
 public final class GiantArchFeaturePlacer implements SurfaceFeaturePlacer {
     private static final long SALT = 0x61A47C11E5L;
-    private static final int CELL_SIZE = 176;
-    private static final float SPAWN_CHANCE = 0.4f;
+    private static final int CELL_SIZE = 230;
+    private static final float SPAWN_CHANCE = 0.35f;
 
-    private static final int MIN_SPAN = 14;
-    private static final int MAX_SPAN = 48;
+    private static final int MIN_SPAN = 29;
+    private static final int MAX_SPAN = 76;
     private static final int RING_SAMPLES = 8;
 
     /** Worst-case leg radius, for {@link #maxReachBlocks()}; the real radius scales with span. */
-    private static final int MAX_LEG_RADIUS = 4;
+    private static final int MAX_LEG_RADIUS = 7;
 
     @Override
     public String id() {
@@ -45,12 +45,12 @@ public final class GiantArchFeaturePlacer implements SurfaceFeaturePlacer {
 
     @Override
     public int cellSizeBlocks() {
-        return CELL_SIZE;
+        return LandformScale.blocks(CELL_SIZE);
     }
 
     @Override
     public int maxReachBlocks() {
-        return MAX_SPAN + MAX_LEG_RADIUS + 4;
+        return LandformScale.blocks(MAX_SPAN + MAX_LEG_RADIUS + 4);
     }
 
     @Override
@@ -105,7 +105,8 @@ public final class GiantArchFeaturePlacer implements SurfaceFeaturePlacer {
         for (int i = 0; i < RING_SAMPLES; i++) {
             double angle = ringOffset + (Math.PI * 2 * i) / RING_SAMPLES;
             float roll = SurfaceNoise.unitHash(site.seed(), i, 7);
-            int span = MIN_SPAN + (int) (roll * roll * (MAX_SPAN - MIN_SPAN));
+            int span = LandformScale.blocks(MIN_SPAN
+                    + Math.round((float) Math.pow(roll, 1.25) * (MAX_SPAN - MIN_SPAN)));
             int bx = site.worldX() + Math.round((float) Math.cos(angle) * span);
             int bz = site.worldZ() + Math.round((float) Math.sin(angle) * span);
             int rowB = bz - dataOriginZ;
@@ -135,11 +136,11 @@ public final class GiantArchFeaturePlacer implements SurfaceFeaturePlacer {
         int span = (int) Math.round(Math.hypot(bx - ax, bz - az));
         // Everything scales with the span, so a 48-block monument is proportionally as massive
         // as a 14-block arch is delicate -- not the same slender rib stretched four times wider.
-        int legHeight = Math.max(8, Math.min(26, Math.round(span * 0.5f)));
-        int apexRise = Math.max(3, Math.min(13, Math.round(span * 0.27f)));
-        int legRadius = Math.min(MAX_LEG_RADIUS, 2 + span / 22);
-        int archHalfWidth = Math.min(3, 1 + span / 18);
-        int archThickness = Math.min(5, 2 + span / 14);
+        int legHeight = Math.max(12, Math.min(65, Math.round(span * 0.54f)));
+        int apexRise = Math.max(6, Math.min(35, Math.round(span * 0.30f)));
+        int legRadius = Math.min(LandformScale.blocks(MAX_LEG_RADIUS), 2 + span / 14);
+        int archHalfWidth = Math.min(7, 2 + span / 17);
+        int archThickness = Math.min(10, 3 + span / 15);
 
         int groundYA = HeightConverter.convertToMinecraftHeight((short) elevA) - 1;
         int groundYB = HeightConverter.convertToMinecraftHeight((short) elevB) - 1;
@@ -227,13 +228,6 @@ public final class GiantArchFeaturePlacer implements SurfaceFeaturePlacer {
     /** Badlands strata: horizontal bands of red rock, keyed to absolute Y so the bands line up
      *  across both legs and the arc no matter which chunk places them. */
     private static BlockState blockFor(long siteSeed, int x, int y, int z) {
-        int band = Math.floorDiv(y + (int) (SurfaceNoise.unitHash(siteSeed, 11, 13) * 4), 3);
-        return switch (Math.floorMod(band, 5)) {
-            case 0 -> Blocks.RED_SANDSTONE.defaultBlockState();
-            case 1 -> Blocks.ORANGE_TERRACOTTA.defaultBlockState();
-            case 2 -> Blocks.SMOOTH_RED_SANDSTONE.defaultBlockState();
-            case 3 -> Blocks.TERRACOTTA.defaultBlockState();
-            default -> Blocks.RED_TERRACOTTA.defaultBlockState();
-        };
+        return BadlandsStrataDecorator.strataFor(x, y, z);
     }
 }

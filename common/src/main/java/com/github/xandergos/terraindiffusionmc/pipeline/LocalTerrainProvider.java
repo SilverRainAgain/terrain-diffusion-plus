@@ -1069,11 +1069,28 @@ public final class LocalTerrainProvider {
                 halo, halo, coreSize, coreSize, analysisWidth);
         float[] coreClimate = cropClimate(climate, analysisHeight, analysisWidth,
                 halo, halo, coreSize, coreSize);
-        float[] classifierElevation = carved.cropAdjustedElevation(
-                halo - 1, halo - 1, coreSize + 2, coreSize + 2, analysisWidth);
+        // Biome edge rounding and domain-warp smoothing need neighbouring candidates.
+        // Classifying only the 2048x2048 core makes the smoothing skip its outer
+        // two rows/columns, leaving unmistakable straight lines at tile borders.
+        // Classify a padded window in *world* coordinates, then crop the center:
+        // adjacent tiles compute exactly the same winners at their shared boundary.
+        final int biomePadding = 12;
+        final int paddedSize = coreSize + 2 * biomePadding;
+        float[] paddedElevation = carved.cropAdjustedElevation(
+                halo - biomePadding, halo - biomePadding, paddedSize, paddedSize, analysisWidth);
+        float[] paddedClimate = cropClimate(climate, analysisHeight, analysisWidth,
+                halo - biomePadding, halo - biomePadding, paddedSize, paddedSize);
+        float[] paddedSlopeElevation = carved.cropAdjustedElevation(
+                halo - biomePadding - 1, halo - biomePadding - 1,
+                paddedSize + 2, paddedSize + 2, analysisWidth);
         long tCrop = System.nanoTime();
-        short[] biomes = BiomeClassifier.classify(coreElevation, coreClimate,
-                coreI0, coreJ0, classifierElevation, coreSize, coreSize, pixelSizeM);
+        short[] paddedBiomes = BiomeClassifier.classify(paddedElevation, paddedClimate,
+                coreI0 - biomePadding, coreJ0 - biomePadding,
+                paddedSlopeElevation, paddedSize, paddedSize, pixelSizeM);
+        short[] biomes = new short[coreSize * coreSize];
+        HydrologyParallel.forEachRow(0, coreSize, coreSize, row ->
+                System.arraycopy(paddedBiomes, (row + biomePadding) * paddedSize + biomePadding,
+                        biomes, row * coreSize, coreSize));
         long tClassify = System.nanoTime();
         FluvialRiverNetwork.applyRiverBiomesFromWindow(
                 biomes, coreClimate, topology, halo, halo, coreSize, coreSize);

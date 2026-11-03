@@ -18,13 +18,13 @@ import net.minecraft.world.level.levelgen.Heightmap;
  */
 public final class MushroomRockFeaturePlacer implements SurfaceFeaturePlacer {
     private static final long SALT = 0x4D569601L;
-    private static final float SPAWN_CHANCE = 0.25f;
+    private static final float SPAWN_CHANCE = 0.16f;
     private static final float MAX_SLOPE_BLOCKS = 0.3f;
-    private static final int CELL_SIZE = 36;
-    private static final int STEM_RADIUS = 1;
-    private static final int STEM_MIN_HEIGHT = 4;
-    private static final int STEM_MAX_HEIGHT = 7;
-    private static final int CAP_THICKNESS = 2;
+    private static final int CELL_SIZE = 92;
+    private static final int STEM_RADIUS = 2;
+    private static final int STEM_MIN_HEIGHT = 8;
+    private static final int STEM_MAX_HEIGHT = 17;
+    private static final int CAP_THICKNESS = 3;
 
     private static final BlockState[] BADLANDS_BANDS = {
             Blocks.RED_SAND.defaultBlockState(),
@@ -42,12 +42,12 @@ public final class MushroomRockFeaturePlacer implements SurfaceFeaturePlacer {
 
     @Override
     public int cellSizeBlocks() {
-        return CELL_SIZE;
+        return LandformScale.blocks(CELL_SIZE);
     }
 
     @Override
     public int maxReachBlocks() {
-        return 6;
+        return LandformScale.blocks(11);
     }
 
     @Override
@@ -58,11 +58,7 @@ public final class MushroomRockFeaturePlacer implements SurfaceFeaturePlacer {
     @Override
     public void place(ChunkAccess chunk, HeightmapData data, int dataOriginX, int dataOriginZ,
                        SiteGrid.Site site, long worldSeed) {
-        int localX = site.worldX() - chunk.getPos().getMinBlockX();
-        int localZ = site.worldZ() - chunk.getPos().getMinBlockZ();
-        if (localX < 0 || localX > 15 || localZ < 0 || localZ > 15) return;
-
-        if (SurfaceNoise.unitHash(worldSeed ^ SALT, site.worldX(), site.worldZ()) >= SPAWN_CHANCE) return;
+                if (SurfaceNoise.unitHash(worldSeed ^ SALT, site.worldX(), site.worldZ()) >= SPAWN_CHANCE) return;
 
         int row = site.worldZ() - dataOriginZ;
         int col = site.worldX() - dataOriginX;
@@ -78,18 +74,18 @@ public final class MushroomRockFeaturePlacer implements SurfaceFeaturePlacer {
         }
         if (TerrainSampling.slopeAt(data, row, col, 2) > SurfaceStamp.slopeFromBlocks(MAX_SLOPE_BLOCKS)) return;
 
-        int groundY = SurfaceStamp.surfaceY(chunk, localX, localZ);
+        int groundY = com.github.xandergos.terraindiffusionmc.world.HeightConverter
+                .convertToMinecraftHeight((short) TerrainSampling.elevationAt(data, row, col)) - 1;
         if (groundY <= chunk.getMinBuildHeight()) return;
-        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(site.worldX(), groundY, site.worldZ());
-        if (!isSolidGround(chunk.getBlockState(pos))) return;
 
         stamp(chunk, site, groundY);
     }
 
     private void stamp(ChunkAccess chunk, SiteGrid.Site site, int groundY) {
         long seed = site.seed();
-        int stemHeight = STEM_MIN_HEIGHT + (int) (SurfaceNoise.unitHash(seed, 0, 0) * (STEM_MAX_HEIGHT - STEM_MIN_HEIGHT + 1));
-        int capRadius = 2 + (int) (SurfaceNoise.unitHash(seed, 1, 0) * 2);
+        int stemHeight = LandformScale.blocks(STEM_MIN_HEIGHT
+                + (int) (SurfaceNoise.unitHash(seed, 0, 0) * (STEM_MAX_HEIGHT - STEM_MIN_HEIGHT + 1)));
+        int capRadius = LandformScale.blocks(3 + (int) (SurfaceNoise.unitHash(seed, 1, 0) * 4));
 
         Heightmap worldSurface = chunk.getOrCreateHeightmapUnprimed(Heightmap.Types.WORLD_SURFACE_WG);
         Heightmap motionBlocking = chunk.getOrCreateHeightmapUnprimed(Heightmap.Types.MOTION_BLOCKING);
@@ -99,21 +95,21 @@ public final class MushroomRockFeaturePlacer implements SurfaceFeaturePlacer {
 
         for (int dy = 0; dy < stemHeight; dy++) {
             int worldY = groundY + 1 + dy;
-            for (int dz = -STEM_RADIUS; dz <= STEM_RADIUS; dz++) {
+            for (int dz = -LandformScale.blocks(STEM_RADIUS); dz <= LandformScale.blocks(STEM_RADIUS); dz++) {
                 int worldZ = site.worldZ() + dz;
                 int localZ = worldZ - minZ;
                 if (localZ < 0 || localZ > 15) continue;
-                for (int dx = -STEM_RADIUS; dx <= STEM_RADIUS; dx++) {
+                for (int dx = -LandformScale.blocks(STEM_RADIUS); dx <= LandformScale.blocks(STEM_RADIUS); dx++) {
                     int worldX = site.worldX() + dx;
                     int localX = worldX - minX;
                     if (localX < 0 || localX > 15) continue;
 
                     float horizontal = (float) Math.sqrt(dx * dx + dz * dz);
-                    if (horizontal > STEM_RADIUS + 0.3f) continue;
+                    if (horizontal > LandformScale.blocks(STEM_RADIUS) + 0.3f) continue;
 
                     pos.set(worldX, worldY, worldZ);
                     if (!chunk.getBlockState(pos).isAir()) continue;
-                    BlockState block = bandFor(seed, worldX, worldY, worldZ);
+                    BlockState block = BadlandsStrataDecorator.strataFor(worldX, worldY, worldZ);
                     chunk.setBlockState(pos, block, false);
                     worldSurface.update(localX, worldY, localZ, block);
                     motionBlocking.update(localX, worldY, localZ, block);
@@ -122,7 +118,7 @@ public final class MushroomRockFeaturePlacer implements SurfaceFeaturePlacer {
         }
 
         int capBaseY = groundY + 1 + stemHeight;
-        for (int cy = 0; cy < CAP_THICKNESS; cy++) {
+        for (int cy = 0; cy < LandformScale.blocks(CAP_THICKNESS); cy++) {
             int worldY = capBaseY + cy;
             for (int dz = -capRadius; dz <= capRadius; dz++) {
                 int worldZ = site.worldZ() + dz;
@@ -134,11 +130,12 @@ public final class MushroomRockFeaturePlacer implements SurfaceFeaturePlacer {
                     if (localX < 0 || localX > 15) continue;
 
                     float horizontal = (float) Math.sqrt(dx * dx + dz * dz);
-                    if (horizontal > capRadius + 0.3f) continue;
+                    float edge = SurfaceNoise.valueNoise(seed, worldX / 7f, worldZ / 7f) * 0.5f;
+                    if (horizontal > capRadius + edge) continue;
 
                     pos.set(worldX, worldY, worldZ);
                     if (!chunk.getBlockState(pos).isAir()) continue;
-                    BlockState block = bandFor(seed, worldX, worldY, worldZ);
+                    BlockState block = BadlandsStrataDecorator.strataFor(worldX, worldY, worldZ);
                     chunk.setBlockState(pos, block, false);
                     worldSurface.update(localX, worldY, localZ, block);
                     motionBlocking.update(localX, worldY, localZ, block);
@@ -147,14 +144,4 @@ public final class MushroomRockFeaturePlacer implements SurfaceFeaturePlacer {
         }
     }
 
-    /** Horizontal 1-block badlands strata keyed to absolute Y with one per-rock offset --
-     *  hashing the band per (x, z) block column speckled the strata instead of layering them. */
-    private static BlockState bandFor(long columnSeed, int x, int y, int z) {
-        int offset = (int) (SurfaceNoise.unitHash(columnSeed, 5, 9) * BADLANDS_BANDS.length);
-        return BADLANDS_BANDS[Math.floorMod(y + offset, BADLANDS_BANDS.length)];
-    }
-
-    private static boolean isSolidGround(BlockState state) {
-        return !state.isAir() && state.getFluidState().isEmpty();
-    }
 }
