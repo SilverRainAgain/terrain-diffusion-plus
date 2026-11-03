@@ -22,7 +22,7 @@ import net.minecraft.world.level.levelgen.Heightmap;
  * bands and no longer sit on unrelated grey stone while surrounding hills are red.
  */
 public final class BadlandsStrataDecorator {
-    private static final int CRUST_DEPTH = 80;
+    private static final int CLIFF_DEPTH_AT_SCALE_2 = 140;
 
     private static final BlockState[] GEOLOGY = {
             Blocks.RED_TERRACOTTA.defaultBlockState(),
@@ -69,7 +69,9 @@ public final class BadlandsStrataDecorator {
                 if (top <= chunk.getMinBuildHeight() || top >= chunk.getMaxBuildHeight()) continue;
                 boolean exposedCliff = TerrainSampling.slopeAt(data, row, col, 3)
                         >= SurfaceStamp.slopeFromBlocks(0.40f);
-                int minimum = Math.max(chunk.getMinBuildHeight(), top - CRUST_DEPTH);
+                // Band the full exposed cliff; avoid repainting deep interior below flat terrain.
+                int depth = exposedCliff ? LandformScale.blocks(CLIFF_DEPTH_AT_SCALE_2) : 16;
+                int minimum = Math.max(chunk.getMinBuildHeight(), top - depth);
 
                 for (int y = top; y >= minimum; y--) {
                     pos.set(x, y, z);
