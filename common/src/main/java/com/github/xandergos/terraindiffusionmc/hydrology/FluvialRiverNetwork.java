@@ -194,7 +194,8 @@ public final class FluvialRiverNetwork {
                 j0, i0, n, millis(t0, t1), millis(t1, t2), millis(t2, t3), millis(t3, t4), millis(t4, t5),
                 millis(t0, t5));
 
-        return new RiverTopology(profile, load, lake, waterSurface, valleyInfluence, depthBoost, height, width);
+        return new RiverTopology(profile, load, lake, waterSurface, valleyInfluence, depthBoost,
+                accumulation, height, width);
     }
 
     private static long millis(long fromNanos, long toNanos) {
@@ -2596,13 +2597,13 @@ public final class FluvialRiverNetwork {
      */
     public record RiverTopology(float[] channelProfile, float[] channelLoad, float[] lakeDepth,
                                 float[] waterSurface, float[] valleyInfluence, float[] depthBoost,
-                                int height, int width) {
+                                float[] drainageAccumulation, int height, int width) {
         static RiverTopology empty(int height, int width) {
             int n = height * width;
             float[] surface = new float[n];
             Arrays.fill(surface, Float.NaN);
             return new RiverTopology(new float[n], new float[n], new float[n], surface,
-                    new float[n], new float[n], height, width);
+                    new float[n], new float[n], new float[n], height, width);
         }
     }
 }

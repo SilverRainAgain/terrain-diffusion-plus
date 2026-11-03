@@ -63,6 +63,7 @@ public final class BiomeClassifier {
     private static final FastNoiseLite REGION_NOISE;
     private static final FastNoiseLite REGION_WARP_X, REGION_WARP_Z;
     private static final FastNoiseLite BIOME_EDGE_WARP_X, BIOME_EDGE_WARP_Z;
+    private static final FastNoiseLite BIOME_EDGE_LARGE_X, BIOME_EDGE_LARGE_Z;
 
     /**
      * Domain-warp displacement amplitude for {@link #sampleRegionNoise}, in blocks. Sized against
@@ -97,8 +98,10 @@ public final class BiomeClassifier {
         // fitted by the biome lab (and the lab's distributional regionNoise model) stay valid.
         REGION_WARP_X = makeFnl(881122, 1f/1500f, 3, 2f, 0.5f);
         REGION_WARP_Z = makeFnl(993344, 1f/1500f, 3, 2f, 0.5f);
-        BIOME_EDGE_WARP_X = makeFnl(192837, 1f/90f, 2, 2f, 0.5f);
-        BIOME_EDGE_WARP_Z = makeFnl(738291, 1f/90f, 2, 2f, 0.5f);
+        BIOME_EDGE_WARP_X = makeFnl(192837, 1f/115f, 2, 2f, 0.5f);
+        BIOME_EDGE_WARP_Z = makeFnl(738291, 1f/115f, 2, 2f, 0.5f);
+        BIOME_EDGE_LARGE_X = makeFnl(485112, 1f/410f, 3, 2f, 0.5f);
+        BIOME_EDGE_LARGE_Z = makeFnl(518447, 1f/410f, 3, 2f, 0.5f);
     }
 
     /**
@@ -321,20 +324,26 @@ public final class BiomeClassifier {
      * straight lines. This does not change ocean, river, coast or hard mountain boundaries.
      *
      * All source samples are read from one immutable copy, and the classifier is evaluated with
-     * a 12-pixel halo by LocalTerrainProvider, so neighbouring generation tiles agree.
+     * a world-coordinate 104-pixel classifier margin by LocalTerrainProvider, so
+     * neighbouring generation tiles agree without a grid-aligned discontinuity.
      */
     private static void warpOrganicLandBoundaries(short[] biomes, int H, int W, int i0, int j0) {
-        final int amplitude = 7;
+        final int maxDisplacement = 92;
         short[] source = biomes.clone();
-        HydrologyParallel.forEachRow(amplitude, H - amplitude, W, row -> {
+        HydrologyParallel.forEachRow(maxDisplacement, H - maxDisplacement, W, row -> {
             int base = row * W;
-            for (int col = amplitude; col < W - amplitude; col++) {
+            for (int col = maxDisplacement; col < W - maxDisplacement; col++) {
                 int idx = base + col;
                 short current = source[idx];
                 if (!BLENDABLE_LAND[current]) continue;
                 float x = j0 + col, z = i0 + row;
-                int shiftX = Math.round(BIOME_EDGE_WARP_X.GetNoise(x, z) * amplitude);
-                int shiftZ = Math.round(BIOME_EDGE_WARP_Z.GetNoise(x, z) * amplitude);
+                // Two physical scales: broad irregular migration of the ecotone,
+                // plus local meanders. A 7-block distortion could not change the
+                // near-straight province boundary visible on large-scale maps.
+                int shiftX = Math.round(68f * BIOME_EDGE_LARGE_X.GetNoise(x, z)
+                        + 24f * BIOME_EDGE_WARP_X.GetNoise(x, z));
+                int shiftZ = Math.round(68f * BIOME_EDGE_LARGE_Z.GetNoise(x, z)
+                        + 24f * BIOME_EDGE_WARP_Z.GetNoise(x, z));
                 short candidate = source[(row + shiftZ) * W + col + shiftX];
                 if (candidate != current && BLENDABLE_LAND[candidate]) biomes[idx] = candidate;
             }

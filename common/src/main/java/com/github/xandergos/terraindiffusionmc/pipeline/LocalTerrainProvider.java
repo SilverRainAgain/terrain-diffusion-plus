@@ -1074,7 +1074,7 @@ public final class LocalTerrainProvider {
         // two rows/columns, leaving unmistakable straight lines at tile borders.
         // Classify a padded window in *world* coordinates, then crop the center:
         // adjacent tiles compute exactly the same winners at their shared boundary.
-        final int biomePadding = 12;
+        final int biomePadding = Math.min(104, Math.max(1, halo - 2));
         final int paddedSize = coreSize + 2 * biomePadding;
         float[] paddedElevation = carved.cropAdjustedElevation(
                 halo - biomePadding, halo - biomePadding, paddedSize, paddedSize, analysisWidth);
@@ -1095,6 +1095,13 @@ public final class LocalTerrainProvider {
         FluvialRiverNetwork.applyRiverBiomesFromWindow(
                 biomes, coreClimate, topology, halo, halo, coreSize, coreSize);
         long tRiverBiomes = System.nanoTime();
+
+        // Surface geometry is derived from the neural heightmap and real drainage,
+        // NOT from freestanding rock placers. The canonical raster is modified here
+        // before it is compacted, so all Minecraft consumers see the same heights.
+        BadlandsHeightmapErosion.erode(coreElevation, biomes, paddedBiomes,
+                paddedElevation, coreSize, biomePadding, coreI0, coreJ0,
+                topology, halo, analysisWidth, pixelSizeM, instanceSeed);
 
         int cells = Math.multiplyExact(coreSize, coreSize);
         short[] compactElevation = new short[cells];
