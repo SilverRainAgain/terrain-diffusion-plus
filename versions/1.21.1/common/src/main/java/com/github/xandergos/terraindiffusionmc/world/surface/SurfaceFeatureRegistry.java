@@ -11,6 +11,7 @@ public final class SurfaceFeatureRegistry {
     private SurfaceFeatureRegistry() {}
 
     public static final List<SurfaceFeaturePlacer> PLACERS = List.of(
+            new BadlandsButteFeaturePlacer(),
             new BoulderFeaturePlacer(),
             new HoodooClusterFeaturePlacer(),
             new ArchFeaturePlacer(),

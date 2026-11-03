@@ -1,6 +1,8 @@
 package com.github.xandergos.terraindiffusionmc.world;
 
 import net.minecraft.server.level.ServerLevel;
+import com.github.xandergos.terraindiffusionmc.biome.BiomeWeightSettings;
+import com.github.xandergos.terraindiffusionmc.pipeline.BiomeClassifier;
 
 /** Runtime access for world-scoped terrain generation settings. */
 public final class WorldScaleManager {
@@ -12,6 +14,7 @@ public final class WorldScaleManager {
 
     private static volatile int currentScale = DEFAULT_SCALE;
     private static volatile boolean blockLowAltitudeSources = DEFAULT_BLOCK_LOW_ALTITUDE_SOURCES;
+    private static volatile boolean vanillaCanyonsEnabled = false;
     private static volatile boolean terrainDiffusionWorldActive;
 
     private WorldScaleManager() {}
@@ -21,6 +24,9 @@ public final class WorldScaleManager {
         if (!terrainDiffusionWorld) {
             currentScale = DEFAULT_SCALE;
             blockLowAltitudeSources = DEFAULT_BLOCK_LOW_ALTITUDE_SOURCES;
+            vanillaCanyonsEnabled = false;
+            BiomeWeightSettings.activate(java.util.Map.of());
+            BiomeClassifier.invalidateBiomeWeights();
             return;
         }
         WorldScaleSettingsState state = serverWorld.getDataStorage().computeIfAbsent(
@@ -30,10 +36,16 @@ public final class WorldScaleManager {
             int scale = pending != null ? pending.scale() : DEFAULT_SCALE;
             boolean sourcePolicy = pending != null
                     ? pending.blockLowAltitudeSources() : DEFAULT_BLOCK_LOW_ALTITUDE_SOURCES;
-            state.setSettings(scale, sourcePolicy);
+            boolean canyons = pending != null && pending.vanillaCanyonsEnabled();
+            java.util.Map<String, Float> weights = pending != null
+                    ? pending.biomeWeights() : java.util.Map.of();
+            state.setSettings(scale, sourcePolicy, canyons, weights);
         }
         currentScale = clampScale(state.getScale());
         blockLowAltitudeSources = state.shouldBlockLowAltitudeSources();
+        vanillaCanyonsEnabled = state.vanillaCanyonsEnabled();
+        BiomeWeightSettings.activate(state.biomeWeights());
+        BiomeClassifier.invalidateBiomeWeights();
     }
 
     /** Compatibility entrypoint for older loader hooks. */
@@ -43,6 +55,7 @@ public final class WorldScaleManager {
 
     public static int getCurrentScale() { return currentScale; }
     public static boolean shouldBlockLowAltitudeSources() { return blockLowAltitudeSources; }
+    public static boolean vanillaCanyonsEnabled() { return vanillaCanyonsEnabled; }
     public static boolean isTerrainDiffusionWorldActive() { return terrainDiffusionWorldActive; }
 
     public static void setCurrentSettings(ServerLevel serverWorld, int configuredScale,

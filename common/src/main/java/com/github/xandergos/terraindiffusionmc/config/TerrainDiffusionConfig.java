@@ -339,6 +339,16 @@ public final class TerrainDiffusionConfig {
         return readString("coarse_drainage.disk_cache.namespace", "default");
     }
 
+    /** Master switch for large stratified buttes in Badlands. */
+    public static boolean badlandsButteFeaturesEnabled() {
+        return readBoolean("badlands.butte_features.enabled", true);
+    }
+
+    /** Fraction of eligible candidate sites that form a large butte, from 0 to 1. */
+    public static float badlandsButteDensity() {
+        return readFloatInRange("badlands.butte_features.density", 0.45f, 0f, 1f);
+    }
+
     /** Global kill switch for procedural surface structures (boulders, hoodoos, arches, ...). */
     public static boolean surfaceFeaturesEnabled() {
         return readBoolean("surface_features.enabled", DEFAULT_SURFACE_FEATURES_ENABLED);

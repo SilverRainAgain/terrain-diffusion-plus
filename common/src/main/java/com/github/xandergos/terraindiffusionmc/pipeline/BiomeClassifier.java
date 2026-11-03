@@ -30,6 +30,11 @@ public final class BiomeClassifier {
     private static final TerrainBiomeRegistry REGISTRY = TerrainBiomeRegistry.instance();
     private static final BiomeRuleEngine ENGINE = new BiomeRuleEngine(REGISTRY);
 
+    /** Called once when the server loads the weights saved for the current world. */
+    public static void invalidateBiomeWeights() {
+        ENGINE.invalidateWeights();
+    }
+
     /**
      * The two registry predicates the smoothing passes ask about, flattened to arrays.
      *
